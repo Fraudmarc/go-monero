@@ -4,10 +4,16 @@ package walletrpc
 type TransferRequest struct {
 	// Destinations - array of destinations to receive XMR:
 	Destinations []Destination `json:"destinations"`
+	// AccountIndex - return transfers for this account.
+	AccountIndex uint64 `json:"account_index"`
+	// SubaddrIndices - return transfers sent to these subaddresses
+	SubaddrIndices []uint64 `json:"subaddr_indices,omitempty"`
 	// Fee - unsigned int; Ignored, will be automatically calculated.
 	Fee uint64 `json:"fee,omitempty"`
 	// Mixin - unsigned int; Number of outpouts from the blockchain to mix with (0 means no mixing).
-	Mixin uint64 `json:"mixin"`
+	Mixin uint64 `json:"mixin,omitempty"`
+	// RingSize - unsigned int; Number of outputs to mix in the transaction (this output + N decoys from the blockchain).
+	RingSize uint64 `json:"ring_size,omitempty"`
 	// unlock_time - unsigned int; Number of blocks before the monero can be spent (0 to not add a lock).
 	UnlockTime uint64 `json:"unlock_time"`
 	// payment_id - string; (Optional) Random 32-byte/64-character hex string to identify a transaction.
@@ -61,6 +67,8 @@ type TransferSplitResponse struct {
 type SweepAllRequest struct {
 	// address - string; Destination public address.
 	Address string `json:"address"`
+	// account_index - unsigned int; Sweep transactions from this account.
+	AccountIndex uint64 `json:"account_index"`
 	// priority - unsigned int; (Optional)
 	Priority Priority `json:"priority,omitempty"`
 	// mixin - unsigned int; Number of outpouts from the blockchain to mix with (0 means no mixing).
@@ -79,7 +87,7 @@ type SweepAllRequest struct {
 	GetTxHex bool `json:"get_tx_hex,omitempty"`
 }
 
-// SweepAllResponse is a tipical response of a SweepAllRequest
+// SweepAllResponse is a typical response of a SweepAllRequest
 type SweepAllResponse struct {
 	// tx_hash_list - array of: string. The tx hashes of every transaction.
 	TxHashList []string `json:"tx_hash_list"`
@@ -87,6 +95,56 @@ type SweepAllResponse struct {
 	TxBlobList []string `json:"tx_blob_list"`
 	// tx_key_list - array of: string. The transaction keys for every transaction.
 	TxKeyList []string `json:"tx_key_list"`
+}
+
+// SweepSingleRequest is the struct to send single unlocked balance to an address.
+type SweepSingleRequest struct {
+	// address - string; Destination public address.
+	Address string `json:"address"`
+	// account_index - unsigned int; Sweep transactions from this account.
+	AccountIndex uint64 `json:"account_index"`
+	// priority - unsigned int; (Optional)
+	Priority Priority `json:"priority,omitempty"`
+	// mixin - unsigned int; Number of outpouts from the blockchain to mix with (0 means no mixing).
+	Mixin uint64 `json:"mixin,omitempty"`
+	// RingSize - unsigned int; Number of outputs to mix in the transaction (this output + N decoys from the blockchain).
+	RingSize uint64 `json:"ring_size,omitempty"`
+	// unlock_time - unsigned int; Number of blocks before the monero can be spent (0 to not add a lock).
+	UnlockTime uint64 `json:"unlock_time"`
+	// payment_id - string; (Optional) Random 32-byte/64-character hex string to identify a transaction.
+	PaymentID string `json:"payment_id,omitempty"`
+	// get_tx_keys - boolean; (Optional) Return the transaction keys after sending.
+	GetTxKeys bool `json:"get_tx_keys,omitempty"`
+	// get_tx_metadata - boolean; (Optional) return the transaction metadata as a string. (Defaults to false)
+	GetTxMetadata bool `json:"get_tx_metadata,omitempty"`
+	//  string; Key image of specific output to sweep.
+	KeyImage string `json:"key_image"`
+	// below_amount - unsigned int; (Optional)
+	BelowAmount uint64 `json:"below_amount"`
+	// do_not_relay - boolean; (Optional)
+	DoNotRelay bool `json:"do_not_relay,omitempty"`
+	// get_tx_hex - boolean; (Optional) return the transactions as hex encoded string.
+	GetTxHex bool `json:"get_tx_hex,omitempty"`
+}
+
+// SweepSingleResponse is a typical response of a SweepSingleRequest
+type SweepSingleResponse struct {
+	// tx_hash_list - string. The tx hashes of every transaction.
+	TxHash string `json:"tx_hash"`
+	// tx_key_list - string. The transaction keys for every transaction.
+	TxKey string `json:"tx_key"`
+	// amount - integer. The amount transferred for every transaction.
+	Amount uint64 `json:"amount"`
+	// fee - integer. The amount of fees paid for every transaction.
+	Fee uint64 `json:"fee"`
+	// tx_blob - string. The tx as hex string for every transaction.
+	TxBlob string `json:"tx_blob"`
+	// tx_metadata - string. List of transaction metadata needed to relay the transactions later.
+	TxMetadata string `json:"tx_metadata"`
+	// multisig_txset - string. The set of signing keys used in a multisig transaction (empty for non-multisig).
+	Multisig_Txset string `json:"multisig_txset"`
+	// unsigned_txset - string. Set of unsigned tx for cold-signing purposes.
+	Unsigned_Txset string `json:"unsigned_txset"`
 }
 
 // Payment ...
@@ -135,12 +193,21 @@ type Transfer struct {
 // IncTransfer is returned by IncomingTransfers
 type IncTransfer struct {
 	Amount uint64 `json:"amount"`
-	Spent  bool   `json:"spent"`
 	// Mostly internal use, can be ignored by most users.
 	GlobalIndex uint64 `json:"global_index"`
+	//key_image - string; Key image for the incoming transfer's unspent output (empty unless verbose is true).
+	KeyImage string `json:"key_image"`
+	// spent - boolean; Indicates if this transfer has been spent.
+	Spent bool `json:"spent"`
+	// subaddr_index - unsigned int; Subaddress index for incoming transfer.
+	SubAddressIndex struct {
+		Major int64 `json:"major"`
+		Minor int64 `json:"minor"`
+	} `json:"subaddr_index"`
 	// Several incoming transfers may share the same hash
 	// if they were in the same transaction.
 	TxHash string `json:"tx_hash"`
+	// tx_size - unsigned int; Size of transaction in bytes.
 	TxSize uint64 `json:"tx_size"`
 }
 
@@ -179,4 +246,27 @@ type AddressBookEntry struct {
 	Description string `json:"description,omitempty"`
 	Index       uint64 `json:"index,omitempty"`
 	PaymentID   string `json:"payment_id,omitempty"`
+}
+
+// GetAccountsResponse Accounts
+type GetAccountsResponse struct {
+	SubaddressAccounts   []SubaddressAccount `json:"subaddress_accounts"`
+	TotalBalance         uint64              `json:"total_balance"`
+	TotalUnlockedBalance uint64              `json:"total_unlocked_balance"`
+}
+
+// SubaddressAccount Subaddress accounts
+type SubaddressAccount struct {
+	AccountIndex    uint64 `json:"account_index"`
+	Balance         uint64 `json:"balance"`
+	BaseAddress     string `json:"base_address"`
+	Label           string `json:"label"`
+	Tag             string `json:"tag"`
+	UnlockedBalance uint64 `json:"unlocked_balance"`
+}
+
+// CreateAccountResponse New account
+type CreateAccountResponse struct {
+	AccountIndex uint64 `json:"account_index"`
+	Address      string `json:"address"`
 }

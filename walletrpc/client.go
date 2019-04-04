@@ -12,6 +12,11 @@ import (
 type Client interface {
 	// Return the wallet's balance.
 	GetBalance() (balance, unlockedBalance uint64, err error)
+	// Get all accounts for a wallet.
+	GetAccounts() (GetAccountsResponse, error)
+	// Create a new account with label.
+	// label - string: label for the account.
+	CreateAccount(label string) (jd CreateAccountResponse, err error)
 	// Return the wallet's address.
 	// address - string; The 95-character hex address string of the monero-wallet-rpc in session.
 	GetAddress() (address string, err error)
@@ -27,6 +32,8 @@ type Client interface {
 	SweepDust() (txHashList []string, err error)
 	// Send all unlocked balance to an address.
 	SweepAll(req SweepAllRequest) (resp *SweepAllResponse, err error)
+	// Send all of a specific unlocked output to an address.
+	SweepSingle(req SweepSingleRequest) (resp *SweepSingleResponse, err error)
 	// Save the blockchain.
 	Store() error
 	// Get a list of incoming payments using a given payment id.
@@ -45,7 +52,8 @@ type Client interface {
 	// Show information about a transfer to/from this address.
 	GetTransferByTxID(txid string) (transfer *Transfer, err error)
 	// Return a list of incoming transfers to the wallet.
-	IncomingTransfers(transfertype GetTransferType) (transfers []IncTransfer, err error)
+	// accountIndex - unsigned int; Return transfers for this account.
+	IncomingTransfers(transfertype GetTransferType, accountIndex uint64) (transfers []IncTransfer, err error)
 	// Return the spend or view private key (or mnemonic seed).
 	QueryKey(keytype QueryKeyType) (key string, err error)
 	// Make an integrated address from the wallet address and a payment id.
@@ -170,6 +178,21 @@ func (c *client) GetBalance() (balance, unlockedBalance uint64, err error) {
 	return jd.Balance, jd.UnlockedBalance, err
 }
 
+func (c *client) GetAccounts() (jd GetAccountsResponse, err error) {
+	err = c.do("get_accounts", nil, &jd)
+	return
+}
+
+func (c *client) CreateAccount(label string) (jd CreateAccountResponse, err error) {
+	jin := struct {
+		Label string `json:"label"`
+	}{
+		label,
+	}
+	err = c.do("create_account", &jin, &jd)
+	return
+}
+
 func (c *client) GetAddress() (address string, err error) {
 	jd := struct {
 		Address string `json:"address"`
@@ -224,6 +247,15 @@ func (c *client) SweepDust() (txHashList []string, err error) {
 func (c *client) SweepAll(req SweepAllRequest) (resp *SweepAllResponse, err error) {
 	resp = &SweepAllResponse{}
 	err = c.do("sweep_all", &req, resp)
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func (c *client) SweepSingle(req SweepSingleRequest) (resp *SweepSingleResponse, err error) {
+	resp = &SweepSingleResponse{}
+	err = c.do("sweep_single", &req, resp)
 	if err != nil {
 		return nil, err
 	}
@@ -291,11 +323,13 @@ func (c *client) GetTransferByTxID(txid string) (transfer *Transfer, err error) 
 	return
 }
 
-func (c *client) IncomingTransfers(transfertype GetTransferType) (transfers []IncTransfer, err error) {
+func (c *client) IncomingTransfers(transfertype GetTransferType, accountIndex uint64) (transfers []IncTransfer, err error) {
 	jin := struct {
 		TransferType GetTransferType `json:"transfer_type"`
+		AccountIndex uint64          `json:"account_index"`
 	}{
 		transfertype,
+		accountIndex,
 	}
 	jd := struct {
 		Transfers []IncTransfer `json:"transfers"`
